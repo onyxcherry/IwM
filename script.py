@@ -77,7 +77,7 @@ def scan(
             pixels_greyscale_values: list[float] = []
             for pixel_x, pixel_y in pixels_on_scan_lines_within_image:
                 rgb = im_pixels[pixel_x, pixel_y]
-                val = mean(rgb)
+                val = mean(rgb) * 5
                 pixels_greyscale_values.append(val)
             whole_line_mean = mean(pixels_greyscale_values)
             data[alfa].append(whole_line_mean)
@@ -85,17 +85,20 @@ def scan(
         alfa += alfa_step
 
     # 5. Zwróć sinogram (bez filtracji)
-    return data
 
     # Pokaż linie skanowania --> w pętli for (zewnętrznej) dodać break na końcu,
     # by pokazać linie tylko dla jednego skanu
-    # x, y = zip(*(pixels_on_scan_lines_within_image + detectors + emitters))
-    # plt.figure(figsize=(8, 8))
-    # plt.axis("equal")
-    # plt.xlim((-floor(radius * 1.1), ceil(radius * 1.1)))
-    # plt.ylim((-floor(radius * 1.1), ceil(radius * 1.1)))
-    # plt.plot(x, y, "ro")
-    # plt.savefig("pixels.png")
+    import matplotlib.pyplot as plt
+    from math import floor, ceil
+
+    x, y = zip(*(pixels_on_scan_lines_within_image + detectors + emitters))
+    plt.figure(figsize=(8, 8))
+    plt.axis("equal")
+    plt.xlim((-floor(radius * 1.1), ceil(radius * 1.1)))
+    plt.ylim((-floor(radius * 1.1), ceil(radius * 1.1)))
+    plt.plot(x, y, "ro", markersize=2)
+    plt.savefig("pixels.png")
+    return data
 
 
 def write_matrix_to_grayscale_file(matrix, output_filename: str) -> None:
@@ -112,7 +115,7 @@ def write_matrix_to_grayscale_file(matrix, output_filename: str) -> None:
 def main():
     image = load_bitmap("./obrazy/Kropka.jpg")
     # sinogram = scan(image, 90, 1 / 90 * pi, 180, 0.2 * pi)
-    sinogram = scan(image, 50, 2 / 50 * pi, 18, 0.2 * pi)
+    sinogram = scan(image, 10, 2 / 10 * pi, 36, 0.15 * pi)
     sinogram_matrix = list(sinogram.values())
     write_matrix_to_grayscale_file(sinogram_matrix, "kropka_sinogram.png")
 
