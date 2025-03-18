@@ -13,6 +13,130 @@ def load_bitmap(filename: str) -> ImageFile:
     image = Image.open(filename)
     return image
 
+def calculate_scan_rays(
+    image: ImageFile,
+    scans_count: int,
+    alfa_step: float,
+    detectors_count: int,
+    detectors_angular_aperture: float,
+):
+    # 1. Opisz okrąg na obrazie
+    im_size = image.size
+    diagonal_length = sqrt(pow(im_size[0], 2) + pow(im_size[1], 2))
+    radius = diagonal_length / 2
+    
+    im_left_x = -im_size[0] // 2
+    im_right_x = im_left_x + im_size[0] - 1
+    im_top_y = -im_size[1] // 2
+    im_bottom_y = im_top_y + im_size[1] - 1
+
+    # 2. Wyznacz położenie n emiterów i n detektorów na okręgu
+
+    # Arrays of all emitters and detectors positions set to (radius, radius)
+    emitters_positions = np.full((scans_count,detectors_count,2), radius, dtype=np.float64)
+    detectors_positions = np.full((scans_count,detectors_count,2), radius, dtype=np.float64)
+
+    # Arrays of all emitters angles set to 0 rad
+    emitters_angles = np.zeros((scans_count,detectors_count), dtype=np.float64)
+
+    # Arrays of all detectors angles set to pi rad
+    detectors_angles = np.full((scans_count,detectors_count), pi, dtype=np.float64)
+
+    # Array of angle differences between scans
+    scan_start_angles = np.arange(0, scans_count*alfa_step, alfa_step, dtype=np.float64)
+
+    # Update emitters and detectors angles to include difference in angle between scans 
+    emitters_angles  += scan_start_angles[:, np.newaxis]
+    detectors_angles += scan_start_angles[:, np.newaxis]
+
+    # Array of angle differences between detectors/emitters
+    angles_dif = np.linspace(-detectors_angular_aperture / 2, detectors_angular_aperture / 2, detectors_count, dtype=np.float64)
+
+    # Update emitters and detectors angles to include difference in angle between detectors/emitters 
+    emitters_angles -= angles_dif
+    detectors_angles += angles_dif
+
+    # Calculating cordinates of emitters and detectors
+    emitters_positions_x = np.cos(emitters_angles)
+    emitters_positions_y = np.sin(emitters_angles)
+    emitters_positions_xy = np.stack((emitters_positions_x, emitters_positions_y), axis=2, dtype=np.float64)
+    emitters_positions *= emitters_positions_xy
+
+    detectors_positions_x = np.cos(detectors_angles)
+    detectors_positions_y = np.sin(detectors_angles)
+    detectors_positions_xy = np.stack((detectors_positions_x, detectors_positions_y), axis=2, dtype=np.float64)
+    detectors_positions_xy = np.stack((np.cos(detectors_angles), np.sin(detectors_angles)), axis=2, dtype=np.float64)
+    detectors_positions *= detectors_positions_xy 
+
+    # all_scans_rays: list[list[list[tuple[int,int]]]] = []
+    all_scans_rays = np.empty((scans_count, detectors_count, im_size[0], im_size[1]), dtype=np.uint8)
+    for scan_number in range(scans_count):
+        # print(f"Create lines in {scan_number} scan")
+        
+        # scan_rays: list[list[tuple[int,int]]] = []
+        for detector_number in range(detectors_count):
+            # 3. Wyznacz linie przejścia
+            # 3. a) wyznacz linie przejścia od emiterów do detektorów
+            emitter_coords = emitters_positions[scan_number][detector_number]
+            detector_coords = detectors_positions[scan_number][detector_number]
+            pixels_coords = line_nd(emitter_coords, detector_coords, endpoint=True)
+            pixels_coords -= np.array([im_left_x, im_top_y])[:, np.newaxis]
+            canvas_size = ceil(diagonal_length)
+            ray_matrix = np.zeros((canvas_size, canvas_size))
+            ray_matrix[(pixels_coords[0], pixels_coords[1])] = 1
+            width, height = im_size
+            all_scans_rays[scan_number][detector_number] = ray_matrix[:width,:height]
+    
+
+            # pixels = np.array(pixels_coords).transpose(1,0)
+            # pixels_count = pixels.shape[0]
+
+            # 3. b) wyznacz linie przejścia tylko przez obraz (wersja z wyszukiwaniem przez połowienie)
+            # line_start = 0
+            # line_end = pixels_count-1
+            # mid_line_point = (line_end - line_start) // 2
+
+            # pixel_x, pixel_y = pixels[mid_line_point]
+            # if(not(
+            #     im_left_x <= pixel_x <= im_right_x
+            #     and im_top_y <= pixel_y <= im_bottom_y
+            # )):
+            #     # TODO
+            #     # możliwe w przypadku szerokiego rozstawu detektorów
+            #     print("coś się zepsuło")
+            #     exit()
+            
+            # end = mid_line_point
+            # while(line_start != end):
+            #     mid_point = (end + line_start) // 2
+            #     pixel_x, pixel_y = pixels[mid_point]
+            #     if(
+            #         im_left_x <= pixel_x <= im_right_x
+            #         and im_top_y <= pixel_y <= im_bottom_y
+            #     ):
+            #         end = mid_point
+            #     else:
+            #         line_start = mid_point + 1
+
+            # start = mid_line_point
+            # while(start != line_end):
+            #     mid_point = ((line_end + start) // 2) +1
+            #     pixel_x, pixel_y = pixels[mid_point]
+            #     if(
+            #         im_left_x <= pixel_x <= im_right_x
+            #         and im_top_y <= pixel_y <= im_bottom_y
+            #     ):
+            #         start = mid_point
+            #     else:
+            #         line_end = mid_point - 1
+
+            # ray: list[tuple[int,int]] = pixels[line_start:line_end+1]
+
+            # scan_rays.append(ray)
+
+        # all_scans_rays.append(scan_rays)
+
+    return all_scans_rays
 
 def scan(
     image_filename,
@@ -20,9 +144,11 @@ def scan(
     alfa_step: float,
     detectors_count: int,
     detectors_angular_aperture: float,
+    ifRaysGiven: bool = False
 ) -> dict[float, list[float]]:
     # angle --> list of data
-    data: dict[float, list[float]] = {}
+    # data: dict[float, list[float]] = {}
+    data = np.zeros((scans_count, detectors_count))
 
     image = load_bitmap(image_filename)
 
@@ -38,19 +164,43 @@ def scan(
     # im_bottom_y = im_size[1] / 2
     im_bottom_y = im_top_y + im_size[1] - 1
 
+    if(ifRaysGiven):
+        all_scans_rays = calculate_scan_rays(image, scans_count, alfa_step, detectors_count, detectors_angular_aperture)
+        image.load()
+        im_pixels = np.asarray(image)
+        im_pixels1 = np.empty((1,1,im_size[0],im_size[1]), dtype=np.uint16)
+        im_pixels.mean(axis=2, out=im_pixels1[0][0])
+
+        all_scans_rays_pixel_number = all_scans_rays.sum(axis=(2,3))
+
+        all_scans_rays *= im_pixels1.astype(dtype=np.uint8)
+
+        all_scans_rays_avg = all_scans_rays.sum(axis=(2,3))
+
+        data = all_scans_rays_avg / all_scans_rays_pixel_number
+        
+        flat_pixels = data.flatten()
+
+        image = Image.new("L", (detectors_count, scans_count))  # "L" mode for grayscale
+        image.putdata(flat_pixels)
+
+        image.save("sinogram2.png")
+        
+        return data
+
     # 2. Wyznacz położenie n emiterów i n detektorów na okręgu
 
-    all_pixels_lines_within_image: list[tuple[int, int]] = []
-    all_emitters: list[tuple[int, int]] = []
-    all_detectors: list[tuple[int, int]] = []
-    alfa = alfa_step
+    # all_pixels_lines_within_image: list[tuple[int, int]] = []
+    # all_emitters: list[tuple[int, int]] = []
+    # all_detectors: list[tuple[int, int]] = []
+    alfa = 0
     for scan_number in range(scans_count):
-        print(f"Scan {scan_number}")
-        data[alfa] = []
-        emitters: list[tuple[int, int]] = []
-        detectors: list[tuple[int, int]] = []
+        # print(f"Scan {scan_number}")
+        # data[alfa] = []
+        # emitters: list[tuple[int, int]] = []
+        # detectors: list[tuple[int, int]] = []
 
-        pixels_on_scan_lines_within_image: list[tuple[int, int]] = []
+        # pixels_on_scan_lines_within_image: list[tuple[int, int]] = []
         
         mid_angle = alfa + pi
 
@@ -143,7 +293,7 @@ def scan(
                 val = mean(rgb)
                 pixels_greyscale_values.append(val)
             whole_line_mean = mean(pixels_greyscale_values)
-            data[alfa].append(whole_line_mean)
+            data[scan_number][detector_number] = whole_line_mean
 
             # Opcjonalne dane do wykresów
             # detectors.append(detector_coords)
@@ -187,6 +337,13 @@ def scan(
     # plt.plot(x, y, "bo", markersize=1, alpha=0.1)
     # plt.imshow(plt.imread(image_filename), extent=(im_left_x, im_right_x, im_bottom_y, im_top_y))
     # plt.savefig(f"pixels.png")
+    
+    flat_pixels = data.flatten()
+
+    image = Image.new("L", (detectors_count, scans_count))  # "L" mode for grayscale
+    image.putdata(flat_pixels)
+
+    image.save("sinogram1.png")
 
     return data
 
@@ -324,6 +481,18 @@ def main():
     detectors_angular_aperture = 0.2 * pi
     sinogramFilename = "kropka_sinogram.png"
     outputFilename = "obraz.png"
+
+    from time import perf_counter
+    start = perf_counter()
+    sinogram = scan(inputFilename, scans_count, alfa_step, detectors_count, detectors_angular_aperture, True)
+    stop = perf_counter()
+    print(f"1. {stop-start}")
+
+    start = perf_counter()
+    sinogram = scan(inputFilename, scans_count, alfa_step, detectors_count, detectors_angular_aperture, False)
+    stop = perf_counter()
+    print(f"2. {stop-start}")
+    exit()
 
     # sinogram = scan(image, 90, 1 / 90 * pi, 180, 0.2 * pi)
     sinogram = scan(inputFilename, scans_count, alfa_step, detectors_count, detectors_angular_aperture)
