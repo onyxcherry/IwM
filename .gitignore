@@ -176,3 +176,6 @@ cython_debug/
 # CT images
 obrazy/
 *.png
+
+# Profiler results
+*.lprof

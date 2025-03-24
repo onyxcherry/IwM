@@ -8,6 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from time import perf_counter
+from line_profiler import LineProfiler
 
 
 def load_bitmap(filename: str) -> ImageFile:
@@ -61,9 +62,11 @@ def calculate_scan_rays(
     alfa_step: float,
     detectors_count: int,
     detectors_angular_aperture: float,
-    ifCreateOptionalPartialImages: bool = False,
-    ifCreateOptionalFullImage: bool = False,
+    folder_name: str = "",
+    create_optional_partial_images: bool = False,
+    create_optional_full_image: bool = False,
 ) -> NDArray:
+# 5.3% time
     image = load_bitmap(image_filename)
     image.load()
     im_size = image.size
@@ -140,12 +143,15 @@ def calculate_scan_rays(
             emitter_coords = emitters_positions[scan_number][detector_number]
             detector_coords = detectors_positions[scan_number][detector_number]
 
+# 63% time
             pixels_coords = line_nd(emitter_coords, detector_coords, endpoint=True)
 
             # Change coordinate system to image coordinate system where point (0,0) means upper left corner of image
+# 7.8% time
             pixels_coords -= np.array([im_left_x, im_top_y])[:, np.newaxis]
 
             # 3. b) wyznacz linie przejścia tylko przez obraz (wersja z wyszukiwaniem przez połowienie)
+# 20.7% time
             line_start, line_end = find_coords_inside_image(pixels_coords, im_size)
             if line_start == -1:
                 # Alternative way to calculate similiar time requirements
@@ -157,6 +163,7 @@ def calculate_scan_rays(
                     & (0 <= pixels_coords[1, :])
                     & (pixels_coords[1, :] < height)
                 )
+
                 all_scans_rays[scan_number][detector_number] = tuple(
                     pixels_coords[:, filter]
                 )
@@ -166,7 +173,9 @@ def calculate_scan_rays(
                 )
 
         # Optional partial rays image
-        if ifCreateOptionalPartialImages:
+        if create_optional_partial_images or scan_number == 0:
+            if folder_name == "":
+                folder_name = image_filename.split(".")[0]
             plt.figure(figsize=(8, 8))
             plt.axis("equal")
             plt.xlim((-floor(radius * 1.1), ceil(radius * 1.1)))
@@ -192,14 +201,16 @@ def calculate_scan_rays(
                     im_top_y,
                 ),
             )
-            if not os.path.exists(f"{image_filename.split(".")[0]}/rays"):
-                if not os.path.exists(f"{image_filename.split(".")[0]}"):
-                    os.mkdir(f"{image_filename.split(".")[0]}")
-                os.mkdir(f"{image_filename.split(".")[0]}/rays")
-            plt.savefig(f"{image_filename.split(".")[0]}/rays/pixels_{scan_number}.png")
+            if not os.path.exists(f"{folder_name}/rays"):
+                if not os.path.exists(f"{folder_name}"):
+                    os.mkdir(f"{folder_name}")
+                os.mkdir(f"{folder_name}/rays")
+            plt.savefig(f"{folder_name}/rays/pixels_{scan_number}.png")
 
     # Optional full rays image
-    if ifCreateOptionalFullImage:
+    if create_optional_full_image:
+        if folder_name == "":
+            folder_name = image_filename.split(".")[0]
         diagonal_length = sqrt(pow(im_size[0], 2) + pow(im_size[1], 2))
         radius = diagonal_length / 2
         plt.figure(figsize=(8, 8))
@@ -240,18 +251,18 @@ def calculate_scan_rays(
                 im_top_y,
             ),
         )
-        if not os.path.exists(f"{image_filename.split(".")[0]}/rays"):
-            if not os.path.exists(f"{image_filename.split(".")[0]}"):
-                os.mkdir(f"{image_filename.split(".")[0]}")
-            os.mkdir(f"{image_filename.split(".")[0]}/rays")
-        plt.savefig(f"{image_filename.split(".")[0]}/rays/pixels.png")
+        if not os.path.exists(f"{folder_name}/rays"):
+            if not os.path.exists(f"{folder_name}"):
+                os.mkdir(f"{folder_name}")
+            os.mkdir(f"{folder_name}/rays")
+        plt.savefig(f"{folder_name}/rays/pixels.png")
 
     return all_scans_rays
 
 
 def calculate_sinogram(
     image_filename: str,
-    all_scans_rays: NDArray,
+    all_scans_rays: NDArray
 ) -> NDArray:
     # Create array for sinogram data
     scans_count, detectors_count = all_scans_rays.shape
@@ -267,26 +278,42 @@ def calculate_sinogram(
 
     for scan_number in range(scans_count):
         for detector_number in range(detectors_count):
+            if len(all_scans_rays[scan_number, detector_number][0]) == 0:
+                data[scan_number, detector_number] = 0
+                continue
             ray_matrix = np.zeros(im_size, dtype=np.uint8)
             ray_matrix[all_scans_rays[scan_number, detector_number]] = 1
 
+# 14.5% time
             ray_pixel_number = ray_matrix.sum()
 
+# 81.6% time
             ray_sum = np.sum(ray_matrix * im_pixels1)
 
-            data[scan_number, detector_number] = ray_sum / ray_pixel_number
+            if ray_pixel_number == 0:
+                print(all_scans_rays[scan_number, detector_number])
+                print(len(all_scans_rays[scan_number, detector_number]))
+                print(ray_matrix)
+                print(ray_sum)
+                exit()
 
-    if not os.path.exists(f"{image_filename.split(".")[0]}"):
-        os.mkdir(f"{image_filename.split(".")[0]}")
-    save_matrix_to_grayscale_image(data, f"{image_filename.split(".")[0]}/sinogram.png")
+
+            data[scan_number, detector_number] = ray_sum / ray_pixel_number
 
     # 5. Zwróć sinogram (bez filtracji)
     return data
 
 
-def save_matrix_to_grayscale_image(matrix: NDArray, output_filename: str):
+def save_matrix_to_grayscale_image(matrix: NDArray, output_filename: str, has_to_be_scaled: bool = True):
 
     height, width = matrix.shape
+
+    if has_to_be_scaled:
+        matrix = (
+            (matrix - np.min(matrix))
+            / (np.max(matrix) - np.min(matrix))
+            * (255)
+        )
 
     image = Image.new("L", (width, height))  # "L" mode for grayscale
     image.putdata(matrix.flatten())
@@ -297,6 +324,7 @@ def make_image(
     filename: str,
     all_scans_rays: NDArray,
     sinogram: NDArray,
+    folder_name: str,
 ):
     scans_count, detectors_count = sinogram.shape
 
@@ -304,41 +332,93 @@ def make_image(
     im_size = image.size
     image.close()
 
+    # 40x40
+    # 1 - normal sinogram without prescaling
+    # 2 - normal sinogram with prescaling
+    # 3 - filtered sinogram without prescaling
+    # 4 - filtered sinogram with prescaling
+    # 5 - filtered sinogram without image scaling
+    # 6 - filtered sinogram with prescaling without image scaling
+
+    # 80x160
+    # 11 - normal sinogram without prescaling
+    # 12 - normal sinogram with prescaling
+    # 13 - filtered sinogram without prescaling
+    # 14 - filtered sinogram with prescaling
+    # 15 - filtered sinogram without image scaling                  BEST 
+    # 16 - filtered sinogram with prescaling without image scaling
+
+    # sinogram = (
+    #     (sinogram - np.min(sinogram))
+    #     / (np.max(sinogram) - np.min(sinogram))
+    #     * (255)
+    # )
+
     image_data = np.zeros(im_size)
     for scan_number in range(scans_count):
         for detector_number in range(detectors_count):
+            if len(all_scans_rays[scan_number, detector_number][0]) == 0:
+                continue
             ray_matrix = np.zeros(im_size, dtype=np.uint8)
             ray_matrix[all_scans_rays[scan_number, detector_number]] = 1
 
+# 93.4% time
             image_data += ray_matrix * sinogram[scan_number, detector_number]
 
-    image_data = (
-        (image_data - np.min(image_data))
-        / (np.max(image_data) - np.min(image_data))
-        * (255)
-    )
 
-    if not os.path.exists(f"{filename.split(".")[0]}"):
-        os.mkdir(f"{filename.split(".")[0]}")
-    save_matrix_to_grayscale_image(image_data, f"{filename.split(".")[0]}/obraz.png")
+    if not os.path.exists(f"{folder_name}"):
+        os.mkdir(f"{folder_name}")
+    save_matrix_to_grayscale_image(image_data, f"{folder_name}/obraz.png", False)
+
+
+def filter_sinogram(sinogram: NDArray) -> NDArray:
+    kernel = np.zeros(21)
+    kernel[10] = 1
+    numerator = -4/(pi**2)
+    for k in range(1,11,2):
+        kernel_value = (numerator)/(k**2)
+        kernel[k+10] = kernel_value
+        kernel[-k+10] = kernel_value
+
+    filtered_sinogram = np.apply_along_axis(lambda x: np.convolve(x, kernel, mode="same"),axis=1, arr=sinogram)
+    
+    save_matrix_to_grayscale_image(filtered_sinogram, f"filtered_sinogram.png")
+
+    return filtered_sinogram
 
 
 def main():
-    filename = "Kropka.jpg"
-    scans_count = 180
+    # filename = "Kropka.jpg"
+    filename = "Shepp_logan.jpg"
+    folder_name = ""
+    # scans_count = 180
+    scans_count = 80
     alfa_step = 2 / scans_count * pi
-    detectors_count = 180
-    detectors_angular_aperture = 0.25 * pi
+    # detectors_count = 180
+    detectors_count = 160
+    detectors_angular_aperture = 0.5 * pi
 
-    start = perf_counter()
+    if folder_name == "":
+        folder_name = filename.split(".")[0]
+
+    if not os.path.exists(f"{folder_name}"):
+        os.mkdir(f"{folder_name}")
+
+# 10.1% time
     scan_rays = calculate_scan_rays(
-        filename, scans_count, alfa_step, detectors_count, detectors_angular_aperture
+        filename, scans_count, alfa_step, detectors_count, detectors_angular_aperture, folder_name
     )
-    exit()
+# 48.4% time
     sinogram = calculate_sinogram(filename, scan_rays)
-    make_image(filename, scan_rays, sinogram)
-    stop = perf_counter()
-    print(f"Script finished in {stop-start} seconds")
+
+    save_matrix_to_grayscale_image(sinogram, f"{folder_name}/sinogram.png")
+
+    filtered_sinogram = filter_sinogram(sinogram)
+
+    save_matrix_to_grayscale_image(filtered_sinogram, f"{folder_name}/filtered_sinogram.png")
+
+# 41.5% time 
+    make_image(filename, scan_rays, filtered_sinogram, folder_name)
 
 
 # Aplikacja powinna móc pozwolić konfigurować następujące elementy:
@@ -348,4 +428,11 @@ def main():
 
 
 if __name__ == "__main__":
+    # lp = LineProfiler()
+    # lp.add_function(calculate_scan_rays)
+    # lp.add_function(calculate_sinogram)
+    # lp.add_function(make_image)
+    # lp_wrapper = lp(main)
+    # lp_wrapper()
+    # lp.print_stats()
     main()
