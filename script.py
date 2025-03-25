@@ -83,24 +83,20 @@ def line_intersection(A, B, C, D):
     min_y = min(C[1], D[1])
     max_y = max(C[1], D[1])
 
-    isInsideSegments = (min_x <= x and 
-                        x <= max_x and
-                        min_y <= y and
-                        y <= max_y)
-    
-    return (x, y) if isInsideSegments else (None, None)
+    isInsideSegments = min_x <= x and x <= max_x and min_y <= y and y <= max_y
 
+    return (x, y) if isInsideSegments else (None, None)
 
 
 def line_image_intersection(start, coords, masks, im_size):
     points = coords[masks]
 
-    # max_x = im_size[0] - 1 
-    # max_y = im_size[1] - 1 
+    # max_x = im_size[0] - 1
+    # max_y = im_size[1] - 1
 
     # if masks[0]:
     #     points.append([0, coords[0][1]])
-    
+
     # if masks[1]:
     #     points.append([max_x, coords[1][1]])
 
@@ -110,8 +106,6 @@ def line_image_intersection(start, coords, masks, im_size):
     # if masks[3]:
     #     points.append([coords[3][0], max_y])
 
-
-
     if points.shape[0] == 0:
         return (None, None)
 
@@ -120,41 +114,42 @@ def line_image_intersection(start, coords, masks, im_size):
 
     return points
 
-    
+
 def get_line_pixels(start, end):
     # d0, d1 = np.diff([start,end], axis=0)[0]
     if start[0] == end[0] and start[1] == end[1]:
         return (np.array([int(start[0])]), np.array([int(start[1])]))
-    d0 = end[0] - start[0] 
-    d1 = end[1] - start[1] 
+    d0 = end[0] - start[0]
+    d1 = end[1] - start[1]
     if np.abs(d0) > np.abs(d1):
         x = np.arange(start[0], end[0] + np.sign(d0), np.sign(d0), dtype=np.int32)
         n = len(x)
         y = np.linspace(start[1], end[1], n, endpoint=True, dtype=np.int32)
         # step = d1/(n-1)
         # y = np.arange(start[1], end[1] + step, step, dtype=np.int32)
-        return (x,y)
+        return (x, y)
     else:
         y = np.arange(start[1], end[1] + np.sign(d1), np.sign(d1), dtype=np.int32)
         n = len(y)
         x = np.linspace(start[0], end[0], n, endpoint=True, dtype=np.int32)
         # step = d0/(n-1)
         # x = np.arange(start[0], end[0] + step, step, dtype=np.int32)
-        return (x,y)
+        return (x, y)
+
 
 def get_line_pixels1(a, im_size, max_size: int):
     # d0, d1 = np.diff([start,end], axis=0)[0]
     matrix = np.full((max_size, max_size), False)
-    d0 = a[2] - a[0] 
-    d1 = a[3] - a[1] 
+    d0 = a[2] - a[0]
+    d1 = a[3] - a[1]
     if np.abs(d0) > np.abs(d1):
         x = np.arange(a[0], a[2] + np.sign(d0), np.sign(d0), dtype=np.int32)
         n = len(x)
         y = np.linspace(a[1], a[3], n, endpoint=True, dtype=np.int32)
         # step = d1/(n-1)
         # y = np.arange(a[1], a[3] + step, step, dtype=np.int32)
-        matrix[(x,y)] = True
-        return np.packbits(matrix[:im_size[0], :im_size[1]])
+        matrix[(x, y)] = True
+        return np.packbits(matrix[: im_size[0], : im_size[1]])
         # return (x,y)
     else:
         y = np.arange(a[1], a[3] + np.sign(d1), np.sign(d1), dtype=np.int32)
@@ -162,9 +157,10 @@ def get_line_pixels1(a, im_size, max_size: int):
         x = np.linspace(a[0], a[2], n, endpoint=True, dtype=np.int32)
         # step = d0/(n-1)
         # x = np.arange(a[0], a[2] + step, step, dtype=np.int32)
-        matrix[(x,y)] = True
-        return np.packbits(matrix[:im_size[0], :im_size[1]])
+        matrix[(x, y)] = True
+        return np.packbits(matrix[: im_size[0], : im_size[1]])
         # return (x,y)
+
 
 def calculate_scan_rays(
     image_filename: str,
@@ -177,7 +173,7 @@ def calculate_scan_rays(
     create_optional_partial_images: bool = False,
     create_optional_full_image: bool = False,
 ) -> NDArray:
-# 1.3% time
+    # 1.3% time
     image = load_bitmap(image_filename)
     image.load()
     im_size = image.size
@@ -249,40 +245,58 @@ def calculate_scan_rays(
     detectors_positions -= np.array([im_left_x, im_top_y])[np.newaxis, np.newaxis, :]
 
     if isTest:
-        star_end_points = np.concatenate([emitters_positions, detectors_positions], axis=-1)
-        return np.apply_along_axis(get_line_pixels1, axis=-1, arr=star_end_points, im_size=im_size, max_size=int(diagonal_length))
+        star_end_points = np.concatenate(
+            [emitters_positions, detectors_positions], axis=-1
+        )
+        return np.apply_along_axis(
+            get_line_pixels1,
+            axis=-1,
+            arr=star_end_points,
+            im_size=im_size,
+            max_size=int(diagonal_length),
+        )
 
+    max_x = im_size[0] - 1
+    max_y = im_size[1] - 1
 
-    max_x = im_size[0] - 1 
-    max_y = im_size[1] - 1 
-
-    
-    a_array = detectors_positions[:,:,1] - emitters_positions[:,:,1]
-    b_array = emitters_positions[:,:,0] - detectors_positions[:,:,0]
-    c_array = a_array * emitters_positions[:,:,0] + b_array * emitters_positions[:,:,1]
+    a_array = detectors_positions[:, :, 1] - emitters_positions[:, :, 1]
+    b_array = emitters_positions[:, :, 0] - detectors_positions[:, :, 0]
+    c_array = (
+        a_array * emitters_positions[:, :, 0] + b_array * emitters_positions[:, :, 1]
+    )
 
     # print(a_array.shape)
     # print(b_array.shape)
     # print(c_array.shape)
 
-    y1 = np.divide(c_array, b_array, out=np.full_like(c_array, -1), where=b_array!=0)
-    y2 = np.divide(c_array - (a_array * max_x), b_array, out=np.full_like(c_array, -1), where=b_array!=0)
-    x1 = np.divide(c_array, a_array, out=np.full_like(c_array, -1), where=a_array!=0)
-    x2 = np.divide(c_array - (b_array * max_y), a_array, out=np.full_like(c_array, -1), where=a_array!=0)
+    y1 = np.divide(c_array, b_array, out=np.full_like(c_array, -1), where=b_array != 0)
+    y2 = np.divide(
+        c_array - (a_array * max_x),
+        b_array,
+        out=np.full_like(c_array, -1),
+        where=b_array != 0,
+    )
+    x1 = np.divide(c_array, a_array, out=np.full_like(c_array, -1), where=a_array != 0)
+    x2 = np.divide(
+        c_array - (b_array * max_y),
+        a_array,
+        out=np.full_like(c_array, -1),
+        where=a_array != 0,
+    )
     # print("----------------------------------------------")
     # print(y1.shape)
     # print(y2.shape)
     # print(x1.shape)
     # print(x2.shape)
-    coords1 = np.stack([np.zeros_like(y1),y1], axis=-1)
-    coords2 = np.stack([np.full_like(y2, max_x),y2], axis=-1)
-    coords3 = np.stack([x1,np.zeros_like(x1)], axis=-1)
-    coords4 = np.stack([x2,np.full_like(x2, max_y)], axis=-1)
+    coords1 = np.stack([np.zeros_like(y1), y1], axis=-1)
+    coords2 = np.stack([np.full_like(y2, max_x), y2], axis=-1)
+    coords3 = np.stack([x1, np.zeros_like(x1)], axis=-1)
+    coords4 = np.stack([x2, np.full_like(x2, max_y)], axis=-1)
     coords = np.stack([coords1, coords2, coords3, coords4], axis=-2)
-    masks1 = ((0 <= coords1[:,:,1]) & (coords1[:,:,1] <= max_y))
-    masks2 = ((0 <= coords2[:,:,1]) & (coords2[:,:,1] <= max_y))
-    masks3 = ((0 < coords3[:,:,0]) & (coords3[:,:,0] < max_x))
-    masks4 = ((0 < coords4[:,:,0]) & (coords4[:,:,0] < max_x))
+    masks1 = (0 <= coords1[:, :, 1]) & (coords1[:, :, 1] <= max_y)
+    masks2 = (0 <= coords2[:, :, 1]) & (coords2[:, :, 1] <= max_y)
+    masks3 = (0 < coords3[:, :, 0]) & (coords3[:, :, 0] < max_x)
+    masks4 = (0 < coords4[:, :, 0]) & (coords4[:, :, 0] < max_x)
     masks = np.stack([masks1, masks2, masks3, masks4], axis=-1)
 
     # print("----------------------------------------------")
@@ -299,13 +313,12 @@ def calculate_scan_rays(
     # print(np.unpackbits(pixels, axis=2, count=im_size[0]*im_size[1]).reshape((scans_count, detectors_count, im_size[0], im_size[1]))[0][2])
     # print(np.unpackbits(pixels, axis=2, count=im_size[0]*im_size[1]).reshape((scans_count, detectors_count, im_size[0], im_size[1]))[0][2].sum())
 
-
     # pixels_coords1 = np.apply_along_axis()
     # points =  np.stack([coords1[masks1], coords2[masks2], coords3[masks3], coords4[masks4]], axis=-2)
 
     # if 0 <= coords[0][1] <= max_y:
     #     points.append([0, coords[0][1]])
-    
+
     # if 0 <= coords[1][1] <= max_y:
     #     points.append([max_x, coords[1][1]])
 
@@ -337,7 +350,12 @@ def calculate_scan_rays(
             emitter_coords = emitters_positions[scan_number][detector_number]
             detector_coords = detectors_positions[scan_number][detector_number]
 
-            start, end = line_image_intersection(emitter_coords, coords[scan_number, detector_number], masks[scan_number, detector_number], im_size)
+            start, end = line_image_intersection(
+                emitter_coords,
+                coords[scan_number, detector_number],
+                masks[scan_number, detector_number],
+                im_size,
+            )
             # start, end = line_image_intersection(emitter_coords, detector_coords, im_size)
             if start is None:
                 all_scans_rays[scan_number][detector_number] = tuple(([], []))
@@ -347,16 +365,16 @@ def calculate_scan_rays(
             all_scans_rays[scan_number][detector_number] = pixels_coords
             continue
 
-# 47.3% time
+            # 47.3% time
             # pixels_coords = line_nd(emitter_coords, detector_coords, endpoint=True)
             pixels_coords = get_line_pixels(emitter_coords, detector_coords)
 
             # Change coordinate system to image coordinate system where point (0,0) means upper left corner of image
-# 6.2% time
+            # 6.2% time
             pixels_coords -= np.array([im_left_x, im_top_y])[:, np.newaxis]
 
             # 3. b) wyznacz linie przejścia tylko przez obraz (wersja z wyszukiwaniem przez połowienie)
-# 15.7% time
+            # 15.7% time
             line_start, line_end = find_coords_inside_image(pixels_coords, im_size)
             if line_start == -1:
                 # Alternative way to calculate similiar time requirements
@@ -376,7 +394,6 @@ def calculate_scan_rays(
                 all_scans_rays[scan_number][detector_number] = tuple(
                     pixels_coords[:, line_start : line_end + 1]
                 )
-            
 
         # Optional partial rays image
         if create_optional_partial_images:
@@ -467,9 +484,7 @@ def calculate_scan_rays(
 
 
 def calculate_sinogram(
-    image_filename: str,
-    all_scans_rays: NDArray,
-    isTest: bool = False
+    image_filename: str, all_scans_rays: NDArray, isTest: bool = False
 ) -> NDArray:
     # Create array for sinogram data
 
@@ -484,63 +499,79 @@ def calculate_sinogram(
     data = np.zeros((scans_count, detectors_count), dtype=np.float64)
 
     if isTest:
-        masks = np.unpackbits(all_scans_rays, axis=-1, count=im_size[0]*im_size[1]).reshape((all_scans_rays.shape[0], all_scans_rays.shape[1], im_size[0], im_size[1])).view(np.bool)
-        data = np.mean(np.broadcast_to(im_pixels1[np.newaxis,np.newaxis, :, :]
-                                       , (all_scans_rays.shape[0], all_scans_rays.shape[1], im_size[0], im_size[1]))
-                       , (-2,-1)
-                       , out=np.zeros((all_scans_rays.shape[0], all_scans_rays.shape[1]))
-                       , where=masks)
-        data[data!=data] = 0
+        masks = (
+            np.unpackbits(all_scans_rays, axis=-1, count=im_size[0] * im_size[1])
+            .reshape(
+                (
+                    all_scans_rays.shape[0],
+                    all_scans_rays.shape[1],
+                    im_size[0],
+                    im_size[1],
+                )
+            )
+            .view(np.bool)
+        )
+        data = np.mean(
+            np.broadcast_to(
+                im_pixels1[np.newaxis, np.newaxis, :, :],
+                (
+                    all_scans_rays.shape[0],
+                    all_scans_rays.shape[1],
+                    im_size[0],
+                    im_size[1],
+                ),
+            ),
+            (-2, -1),
+            out=np.zeros((all_scans_rays.shape[0], all_scans_rays.shape[1])),
+            where=masks,
+        )
+        data[data != data] = 0
         return data
-            
-
-
 
     for scan_number in range(scans_count):
         for detector_number in range(detectors_count):
             if len(all_scans_rays[scan_number, detector_number][0]) == 0:
                 data[scan_number, detector_number] = 0
                 continue
-# 3.6%
+            # 3.6%
             # print(im_pixels1[all_scans_rays[scan_number, detector_number]])
 
-            data[scan_number, detector_number] = np.mean(im_pixels1[all_scans_rays[scan_number, detector_number]])
+            data[scan_number, detector_number] = np.mean(
+                im_pixels1[all_scans_rays[scan_number, detector_number]]
+            )
             # print(data[scan_number, detector_number])
 
-#             ray_matrix = np.zeros(im_size, dtype=np.uint8)
-# # 4.1%
-#             ray_matrix[all_scans_rays[scan_number, detector_number]] = 1
+    #             ray_matrix = np.zeros(im_size, dtype=np.uint8)
+    # # 4.1%
+    #             ray_matrix[all_scans_rays[scan_number, detector_number]] = 1
 
-# # 57.5% time
-#             ray_pixel_number = ray_matrix.sum()
+    # # 57.5% time
+    #             ray_pixel_number = ray_matrix.sum()
 
-# # 26.1% time
-#             ray_sum = im_pixels1.sum(where=(ray_matrix > 0))
+    # # 26.1% time
+    #             ray_sum = im_pixels1.sum(where=(ray_matrix > 0))
 
-#             if ray_pixel_number == 0:
-#                 print(all_scans_rays[scan_number, detector_number])
-#                 print(len(all_scans_rays[scan_number, detector_number]))
-#                 print(ray_matrix)
-#                 print(ray_sum)
-#                 exit()
+    #             if ray_pixel_number == 0:
+    #                 print(all_scans_rays[scan_number, detector_number])
+    #                 print(len(all_scans_rays[scan_number, detector_number]))
+    #                 print(ray_matrix)
+    #                 print(ray_sum)
+    #                 exit()
 
-
-#             data[scan_number, detector_number] = ray_sum / ray_pixel_number
+    #             data[scan_number, detector_number] = ray_sum / ray_pixel_number
 
     # 5. Zwróć sinogram (bez filtracji)
     return data
 
 
-def save_matrix_to_grayscale_image(matrix: NDArray, output_filename: str, has_to_be_scaled: bool = True):
+def save_matrix_to_grayscale_image(
+    matrix: NDArray, output_filename: str, has_to_be_scaled: bool = True
+):
 
     height, width = matrix.shape
 
     if has_to_be_scaled:
-        matrix = (
-            (matrix - np.min(matrix))
-            / (np.max(matrix) - np.min(matrix))
-            * (255)
-        )
+        matrix = (matrix - np.min(matrix)) / (np.max(matrix) - np.min(matrix)) * (255)
 
     image = Image.new("L", (width, height))  # "L" mode for grayscale
     image.putdata(matrix.flatten())
@@ -552,7 +583,7 @@ def make_image(
     all_scans_rays: NDArray,
     sinogram: NDArray,
     folder_name: str,
-    isTest: bool = False
+    isTest: bool = False,
 ):
     scans_count, detectors_count = sinogram.shape
 
@@ -563,40 +594,56 @@ def make_image(
     image_data = np.zeros(im_size)
 
     if isTest:
-        masks = np.unpackbits(all_scans_rays, axis=-1, count=im_size[0]*im_size[1]).reshape((all_scans_rays.shape[0], all_scans_rays.shape[1], im_size[0], im_size[1])).view(np.bool)
+        masks = (
+            np.unpackbits(all_scans_rays, axis=-1, count=im_size[0] * im_size[1])
+            .reshape(
+                (
+                    all_scans_rays.shape[0],
+                    all_scans_rays.shape[1],
+                    im_size[0],
+                    im_size[1],
+                )
+            )
+            .view(np.bool)
+        )
 
     for scan_number in range(scans_count):
-# 11.1% time
+        # 11.1% time
         for detector_number in range(detectors_count):
-# 12.2% time            
+            # 12.2% time
             if isTest:
-                image_data[masks[scan_number, detector_number]] += sinogram[scan_number, detector_number]
+                image_data[masks[scan_number, detector_number]] += sinogram[
+                    scan_number, detector_number
+                ]
                 continue
 
             if len(all_scans_rays[scan_number, detector_number][0]) == 0:
                 continue
 
-# 56.8% time
-            image_data[all_scans_rays[scan_number, detector_number]] += sinogram[scan_number, detector_number]
-
+            # 56.8% time
+            image_data[all_scans_rays[scan_number, detector_number]] += sinogram[
+                scan_number, detector_number
+            ]
 
     if not os.path.exists(f"{folder_name}"):
         os.mkdir(f"{folder_name}")
-# 17.6% time
+    # 17.6% time
     save_matrix_to_grayscale_image(image_data, f"{folder_name}/obraz.png", False)
 
 
 def filter_sinogram(sinogram: NDArray) -> NDArray:
     kernel = np.zeros(21)
     kernel[10] = 1
-    numerator = -4/(pi**2)
-    for k in range(1,11,2):
-        kernel_value = (numerator)/(k**2)
-        kernel[k+10] = kernel_value
-        kernel[-k+10] = kernel_value
+    numerator = -4 / (pi**2)
+    for k in range(1, 11, 2):
+        kernel_value = (numerator) / (k**2)
+        kernel[k + 10] = kernel_value
+        kernel[-k + 10] = kernel_value
 
-    filtered_sinogram = np.apply_along_axis(lambda x: np.convolve(x, kernel, mode="same"),axis=1, arr=sinogram)
-    
+    filtered_sinogram = np.apply_along_axis(
+        lambda x: np.convolve(x, kernel, mode="same"), axis=1, arr=sinogram
+    )
+
     save_matrix_to_grayscale_image(filtered_sinogram, f"filtered_sinogram.png")
 
     return filtered_sinogram
@@ -619,24 +666,29 @@ def main():
     if not os.path.exists(f"{folder_name}"):
         os.mkdir(f"{folder_name}")
 
-# 38% time
+    # 38% time
     scan_rays = calculate_scan_rays(
-        filename, scans_count, alfa_step, detectors_count, detectors_angular_aperture, folder_name
+        filename,
+        scans_count,
+        alfa_step,
+        detectors_count,
+        detectors_angular_aperture,
+        folder_name,
     )
-# 58.9% time
+    # 58.9% time
     sinogram = calculate_sinogram(filename, scan_rays)
-
 
     save_matrix_to_grayscale_image(sinogram, f"{folder_name}/sinogram.png")
 
     filtered_sinogram = filter_sinogram(sinogram)
 
-    save_matrix_to_grayscale_image(filtered_sinogram, f"{folder_name}/filtered_sinogram.png")
+    save_matrix_to_grayscale_image(
+        filtered_sinogram, f"{folder_name}/filtered_sinogram.png"
+    )
 
-# 2.8% time 
+    # 2.8% time
     make_image(filename, scan_rays, filtered_sinogram, folder_name)
 
-    
     # scan_rays = calculate_scan_rays(
     #     filename, scans_count, alfa_step, detectors_count, detectors_angular_aperture, folder_name, True
     # )
@@ -666,14 +718,14 @@ def main():
 # 12 - normal sinogram with prescaling
 # 13 - filtered sinogram without prescaling
 # 14 - filtered sinogram with prescaling
-# 15 - filtered sinogram without image scaling                  BEST 
+# 15 - filtered sinogram without image scaling                  BEST
 # 16 - filtered sinogram with prescaling without image scaling
 
 if __name__ == "__main__":
     lp = LineProfiler()
-    # lp.add_function(line_image_intersection) 
-    # lp.add_function(get_line_pixels) 
-    # lp.add_function(calculate_scan_rays) 
+    # lp.add_function(line_image_intersection)
+    # lp.add_function(get_line_pixels)
+    # lp.add_function(calculate_scan_rays)
     lp.add_function(calculate_sinogram)
     # lp.add_function(filter_sinogram)
     # lp.add_function(make_image)
