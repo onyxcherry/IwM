@@ -606,4 +606,10 @@ def create_dicom_from_image(
 
 
 def mse(original: np.ndarray, recreated: np.ndarray):
-    return np.mean((recreated - original) ** 2)
+    original_min = original.min()
+    original_max = original.max()
+    original_normalized = (original - original_min)/(original_max - original_min)
+    recreated_min = recreated.min()
+    recreated_max = recreated.max()
+    recreated_normalized = (recreated - recreated_min)/(recreated_max - recreated_min)
+    return np.mean((recreated_normalized - original_normalized) ** 2)
