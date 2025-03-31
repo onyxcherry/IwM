@@ -603,3 +603,7 @@ def create_dicom_from_image(
     ds.is_little_endian = True
     ds.is_implicit_VR = False
     ds.save_as(output_path, write_like_original=False)
+
+
+def mse(original: np.ndarray, recreated: np.ndarray):
+    return np.mean((recreated - original) ** 2)
