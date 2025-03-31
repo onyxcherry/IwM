@@ -283,14 +283,14 @@ def calculateRayPixels(current_intersections, current_is_inside_image):
     # Find which intersections are correct
     end_points = current_intersections[current_is_inside_image]
 
-    if end_points.shape[0] == 0:
+    if end_points.shape == 0 or end_points.shape[0] == 0:
         # If no intersections are correct then ray is entirely outside image
         return tuple(([], []))
 
     if end_points.shape[0] == 1:
         # If only one intersection is correct then ray pass only through 1 pixel
         x, y = end_points[0]
-        return tuple(([int(x)], [int(y)]))
+        return tuple(([int(y)], [int(x)]))
 
     # Calculate pixels of image that are passed through between given end_points
     return getLinePixels(end_points[0], end_points[1])
@@ -342,6 +342,7 @@ def displayState(
     processed_rays_info,
     sinogram,
     reconstructed_image,
+    mse_value,
     scan_number,
 ):
     (image_pixels, plot_xlim, plot_ylim) = plot_info
@@ -366,7 +367,7 @@ def displayState(
 
     # Display reconstructed image
     axes[2].imshow(reconstructed_image, cmap="gray")
-    axes[2].set_title(f"Image reconstructed after scan nr. {scan_number}")
+    axes[2].set_title(f"Image reconstructed after scan nr. {scan_number}\n mse = {mse_value}")
 
     clear_output(wait=True)
     plt.show()
@@ -457,6 +458,12 @@ def simulateComputedTomographyScan(
 
     for scan_number in range(scans_count):
         for detector_number in range(detectors_count):
+            # Edge case when emitter and detector is in same position (pi rad detectors_angular_aperture case)
+            if ( (emitter_positions[scan_number, detector_number][0] - detector_positions[scan_number, detector_number][0] < 0.0001) and
+                 (emitter_positions[scan_number, detector_number][1] - detector_positions[scan_number, detector_number][1] < 0.0001)
+                ):
+                all_scans_rays[scan_number, detector_number] = tuple(([], []))
+                continue
             # Calculate pixels of image that are passed through between given end_points
             pixels_coords = calculateRayPixels(
                 intersections[scan_number, detector_number],
@@ -504,11 +511,13 @@ def simulateComputedTomographyScan(
             )
             processed_rays_info = processRays(rays_info)
             processed_image = processImage(image_data)
+            mse_value = mse(plot_info[0].mean(-1), processed_image)
             displayState(
                 plot_info,
                 processed_rays_info,
                 sinogram,
                 processed_image,
+                mse_value, 
                 scan_number + 1,
             )
 
@@ -520,8 +529,9 @@ def simulateComputedTomographyScan(
         )
         processed_rays_info = processRays(rays_info)
         processed_image = processImage(image_data)
+        mse_value = mse(plot_info[0].mean(-1), processed_image)
         displayState(
-            plot_info, processed_rays_info, sinogram, processed_image, scan_number + 1
+            plot_info, processed_rays_info, sinogram, processed_image, mse_value, scan_number + 1
         )
 
     if has_to_save_intermediate_steps:
@@ -542,7 +552,8 @@ def showStateAfterScan(states, scan, hasToBeTruncated=True, hasToBeFiltered=True
         processed_rays_info = processRays(all_rays_info)
         processed_image = processImage(image_data, hasToBeTruncated, hasToBeFiltered)
 
-        displayState(plot_info, processed_rays_info, sinogram, processed_image, scan)
+        mse_value = mse(plot_info[0].mean(-1), processed_image)
+        displayState(plot_info, processed_rays_info, sinogram, processed_image, mse_value, scan)
     else:
         emitter_positions, detector_positions, all_scans_rays = all_rays_info
 
@@ -559,8 +570,9 @@ def showStateAfterScan(states, scan, hasToBeTruncated=True, hasToBeFiltered=True
         processed_image = processImage(
             image_data[scan - 1], hasToBeTruncated, hasToBeFiltered
         )
+        mse_value = mse(plot_info[0].mean(-1), processed_image)
         displayState(
-            plot_info, processed_rays_info, new_sinogram, processed_image, scan
+            plot_info, processed_rays_info, new_sinogram, processed_image, mse_value, scan
         )
 
 
