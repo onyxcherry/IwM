@@ -368,7 +368,9 @@ def displayState(
 
     # Display reconstructed image
     axes[2].imshow(reconstructed_image, cmap="gray")
-    axes[2].set_title(f"Image reconstructed after scan nr. {scan_number}\n mse = {mse_value}")
+    axes[2].set_title(
+        f"Image reconstructed after scan nr. {scan_number}\n mse = {mse_value}"
+    )
 
     clear_output(wait=True)
     plt.show()
@@ -460,9 +462,15 @@ def simulateComputedTomographyScan(
     for scan_number in range(scans_count):
         for detector_number in range(detectors_count):
             # Edge case when emitter and detector is in same position (pi rad detectors_angular_aperture case)
-            if ( (emitter_positions[scan_number, detector_number][0] - detector_positions[scan_number, detector_number][0] < 0.0001) and
-                 (emitter_positions[scan_number, detector_number][1] - detector_positions[scan_number, detector_number][1] < 0.0001)
-                ):
+            if (
+                emitter_positions[scan_number, detector_number][0]
+                - detector_positions[scan_number, detector_number][0]
+                < 0.0001
+            ) and (
+                emitter_positions[scan_number, detector_number][1]
+                - detector_positions[scan_number, detector_number][1]
+                < 0.0001
+            ):
                 all_scans_rays[scan_number, detector_number] = tuple(([], []))
                 continue
             # Calculate pixels of image that are passed through between given end_points
@@ -518,7 +526,7 @@ def simulateComputedTomographyScan(
                 processed_rays_info,
                 sinogram,
                 processed_image,
-                mse_value, 
+                mse_value,
                 scan_number + 1,
             )
 
@@ -532,7 +540,12 @@ def simulateComputedTomographyScan(
         processed_image = processImage(image_data)
         mse_value = mse(plot_info[0].mean(-1), processed_image)
         displayState(
-            plot_info, processed_rays_info, sinogram, processed_image, mse_value, scan_number + 1
+            plot_info,
+            processed_rays_info,
+            sinogram,
+            processed_image,
+            mse_value,
+            scan_number + 1,
         )
 
     if has_to_save_intermediate_steps:
@@ -554,7 +567,9 @@ def showStateAfterScan(states, scan, hasToBeTruncated=True, hasToBeFiltered=True
         processed_image = processImage(image_data, hasToBeTruncated, hasToBeFiltered)
 
         mse_value = mse(plot_info[0].mean(-1), processed_image)
-        displayState(plot_info, processed_rays_info, sinogram, processed_image, mse_value, scan)
+        displayState(
+            plot_info, processed_rays_info, sinogram, processed_image, mse_value, scan
+        )
     else:
         emitter_positions, detector_positions, all_scans_rays = all_rays_info
 
@@ -573,7 +588,12 @@ def showStateAfterScan(states, scan, hasToBeTruncated=True, hasToBeFiltered=True
         )
         mse_value = mse(plot_info[0].mean(-1), processed_image)
         displayState(
-            plot_info, processed_rays_info, new_sinogram, processed_image, mse_value, scan
+            plot_info,
+            processed_rays_info,
+            new_sinogram,
+            processed_image,
+            mse_value,
+            scan,
         )
 
 
@@ -634,8 +654,8 @@ def create_dicom_from_image(
 def mse(original: np.ndarray, recreated: np.ndarray):
     original_min = original.min()
     original_max = original.max()
-    original_normalized = (original - original_min)/(original_max - original_min)
+    original_normalized = (original - original_min) / (original_max - original_min)
     recreated_min = recreated.min()
     recreated_max = recreated.max()
-    recreated_normalized = (recreated - recreated_min)/(recreated_max - recreated_min)
+    recreated_normalized = (recreated - recreated_min) / (recreated_max - recreated_min)
     return np.mean((recreated_normalized - original_normalized) ** 2)
