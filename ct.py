@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from math import pi, sqrt, floor, ceil
 from typing import Optional
 
@@ -576,8 +577,21 @@ def showStateAfterScan(states, scan, hasToBeTruncated=True, hasToBeFiltered=True
         )
 
 
+@dataclass
+class PatientInfo:
+    first_name: str
+    surname: str
+    identifier: str
+    birth_date: datetime.date
+
+
 def create_dicom_from_image(
-    image, output_path, series_description="", private_comment: Optional[None] = None
+    image,
+    output_path,
+    patient_info: PatientInfo,
+    study_datetime: datetime,
+    series_description="",
+    private_comment: Optional[None] = None,
 ):
     if isinstance(image, Image.Image):
         image = np.array(image)
@@ -592,14 +606,14 @@ def create_dicom_from_image(
 
     ds.SOPClassUID = pydicom.uid.SecondaryCaptureImageStorage
     ds.SOPInstanceUID = pydicom.uid.generate_uid()
-    ds.PatientName = "Kowalski^Jan"
-    ds.PatientID = "123456"
-    ds.PatientBirthDate = "19700101"
+    ds.PatientName = f"{patient_info.surname}^{patient_info.first_name}"
+    ds.PatientID = patient_info.identifier
+    ds.PatientBirthDate = patient_info.birth_date.strftime("%Y%m%d")
     ds.Modality = "CT"
     ds.StudyInstanceUID = pydicom.uid.generate_uid()
     ds.SeriesInstanceUID = pydicom.uid.generate_uid()
-    ds.StudyDate = datetime.date.today().strftime("%Y%m%d")
-    ds.StudyTime = datetime.datetime.now().strftime("%H%M%S")
+    ds.StudyDate = study_datetime.strftime("%Y%m%d")
+    ds.StudyTime = study_datetime.strftime("%H%M%S")
     ds.Rows, ds.Columns = image.shape
     ds.BitsAllocated = 16
     ds.BitsStored = 16
